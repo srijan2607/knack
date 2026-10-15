@@ -284,7 +284,8 @@ class CommandHelpFile(HelpFile):
                     'choices': action.choices,
                     'required': False,
                     'default': None,
-                    'group_name': 'Positional'
+                    'group_name': 'Positional',
+                    'is_positional': True
                 }
                 self.parameters.append(HelpParameter(**param_kwargs))
 
@@ -352,6 +353,8 @@ class CommandHelpFile(HelpFile):
         loaded_param = {}
         for param in self.parameters:
             loaded_param = next((n for n in data['parameters'] if n['name'] == param.name), None)
+            if loaded_param is None:
+                loaded_param = next((n for n in data['parameters'] if param.matches_name(n['name'])), None)
             if loaded_param:
                 param.update_from_data(loaded_param)
             loaded_params.append(param)
@@ -362,9 +365,11 @@ class CommandHelpFile(HelpFile):
 class HelpParameter(HelpObject):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, name_source, description, required, choices=None, default=None, group_name=None,
-                 deprecate_info=None, preview_info=None, experimental_info=None, default_value_source=None):
+                 deprecate_info=None, preview_info=None, experimental_info=None, default_value_source=None,
+                 is_positional=False):
         super().__init__()
         self.name_source = name_source
+        self.is_positional = is_positional
         self.name = ' '.join(sorted(name_source))
         self.required = required
         self.type = 'string'
@@ -379,8 +384,18 @@ class HelpParameter(HelpObject):  # pylint: disable=too-many-instance-attributes
         self.experimental_info = experimental_info
         self.default_value_source = default_value_source
 
+    def matches_name(self, name):
+        """Match an exact name, a single option alias, or all aliases in any order."""
+        if self.name == name:
+            return True
+        # Positional metavars may contain spaces; never split them into aliases.
+        if self.is_positional or not isinstance(name, str) or not self.name_source or \
+                not all(option.startswith('-') for option in self.name_source):
+            return False
+        return name in self.name_source or sorted(name.split()) == sorted(self.name_source)
+
     def update_from_data(self, data):
-        if self.name != data.get('name'):
+        if not self.matches_name(data.get('name')):
             raise HelpAuthoringException("mismatched name {} vs. {}"
                                          .format(self.name,
                                                  data.get('name')))

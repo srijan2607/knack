@@ -38,7 +38,7 @@ helps['hello world'] = """
                   - mycli hello languages
                   - These indicate where values can be retrieved for input to this command
                 - name: --another-parameter
-                  short-summary: These parameter names must match what is shown in the command's CLI help output, including abbreviation.
+                  short-summary: Parameter names may use one exact option alias or all aliases in any order.
             examples:
                 - name: Document a parameter that doesn't exist
                   text: >
@@ -48,6 +48,8 @@ helps['hello world'] = """
                     The > character collapses multiple lines into a single line, which is good for on-screen wrapping.
             """
 </pre>
+
+For example, `--language -l`, `--language`, `-l`, and `-l --language` all identify the same parameter. Partial option names and subsets containing more than one but fewer than all aliases do not match. Positional parameter names must still match their displayed name exactly, including spaces. When both an exact displayed name and an alias entry are present, the exact entry takes precedence. The displayed aliases are unchanged.
 
 You can also document groups using the same format.
 
