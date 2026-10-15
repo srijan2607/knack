@@ -317,7 +317,8 @@ class CommandHelpFile(HelpFile):
             'choices': param.choices,
             'required': param.required,
             'default': param.default,
-            'group_name': param.container.description
+            'group_name': param.container.description,
+            'is_positional': False
         }
         normal_options = []
         deprecated_options = []
@@ -366,7 +367,7 @@ class HelpParameter(HelpObject):  # pylint: disable=too-many-instance-attributes
 
     def __init__(self, name_source, description, required, choices=None, default=None, group_name=None,
                  deprecate_info=None, preview_info=None, experimental_info=None, default_value_source=None,
-                 is_positional=False):
+                 is_positional=None):
         super().__init__()
         self.name_source = name_source
         self.is_positional = is_positional
@@ -388,11 +389,13 @@ class HelpParameter(HelpObject):  # pylint: disable=too-many-instance-attributes
         """Match an exact name, a single option alias, or all aliases in any order."""
         if self.name == name:
             return True
-        # Positional metavars may contain spaces; never split them into aliases.
-        if self.is_positional or not isinstance(name, str) or not self.name_source or \
-                not all(option.startswith('-') for option in self.name_source):
+        # Only parser-confirmed optionals opt in; unknown legacy/downstream
+        # parameters and positional metavars retain exact-name matching.
+        if self.is_positional is not False or not isinstance(name, str) or not self.name_source:
             return False
-        return name in self.name_source or sorted(name.split()) == sorted(self.name_source)
+        aliases = name.split()
+        return (len(aliases) == 1 and aliases[0] in self.name_source) or \
+            sorted(aliases) == sorted(self.name_source)
 
     def update_from_data(self, data):
         if not self.matches_name(data.get('name')):
