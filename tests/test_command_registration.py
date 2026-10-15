@@ -205,6 +205,53 @@ class TestCommandRegistration(unittest.TestCase):
                 self.assertEqual(set(command.arguments), {'group_name', 'resource_name', 'opt_param', 'expand'})
                 self.assertEqual(command.description(), 'The operation to get a virtual machine.')
 
+    def test_create_command_preserves_falsey_callable_for_custom_command(self):
+        class FalseyLoader:
+            def __bool__(self):
+                return False
+
+            def __call__(self):
+                return 'Custom value'
+
+        class CustomCommand:
+            def __init__(self, cli_ctx, name, handler, **kwargs):
+                self.arguments_loader = kwargs['arguments_loader']
+                self.description_loader = kwargs['description_loader']
+
+        arguments = FalseyLoader()
+        description = FalseyLoader()
+        command = CLICommandsLoader(self.mock_ctx, command_cls=CustomCommand).create_command(
+            'custom', 'unused#handler', arguments_loader=arguments, description_loader=description)
+        self.assertIs(command.arguments_loader, arguments)
+        self.assertIs(command.description_loader, description)
+        self.assertEqual(command.arguments_loader(), 'Custom value')
+        self.assertEqual(command.description_loader(), 'Custom value')
+
+    def test_command_none_resets_group_loaders_to_inferred_defaults(self):
+        cl = CLICommandsLoader(self.mock_ctx)
+        with CommandGroup(cl, 'test', '{}#{{}}'.format(__name__),
+                          arguments_loader=lambda: [], description_loader=lambda: 'Group description') as group:
+            group.command('reset', '{}.sample_command_handler'.format(type(self).__name__),
+                          arguments_loader=None, description_loader=None)
+        command_name = self._set_command_name('test reset')
+        cl.load_arguments(command_name)
+        command = cl.command_table[command_name]
+        self.assertIn('resource_name', command.arguments)
+        self.assertEqual(command.description(), 'The operation to get a virtual machine.')
+
+    def test_group_custom_arguments_receive_registered_overrides(self):
+        cl = CLICommandsLoader(self.mock_ctx)
+        with CommandGroup(cl, 'test', 'unused#{}', arguments_loader=lambda: [
+                ('custom', CLICommandArgument('custom', help='Original'))]) as group:
+            group.command('show', 'handler')
+        command_name = self._set_command_name('test show')
+        with ArgumentsContext(cl, 'test') as context:
+            context.argument('custom', options_list=['--configured'], help='Configured')
+        cl.load_arguments(command_name)
+        argument = cl.command_table[command_name].arguments['custom']
+        self.assertEqual(argument.options_list, ['--configured'])
+        self.assertEqual(argument.options['help'], 'Configured')
+
     def test_register_command_group_with_no_group_name(self):
         cl = CLICommandsLoader(self.mock_ctx)
         command_name = self._set_command_name('sample-command')
